@@ -1,5 +1,7 @@
 import sqlite3
 import sys
+import re
+from pathlib import Path
 
 import pandas as pd
 
@@ -78,6 +80,18 @@ def reference_checks(orders, cust):
           cust["gender"].value_counts().to_dict() == ref["genders"])
     check("reference: ages 18-60", cust["age"].between(18, 60).all())
 
+# Scans our own code, the SQL file and the README for dollar amounts
+# (like "$5") or "USD". All money must be written in INR.
+def money_checks():
+    pattern = re.compile(r"\$\s?\d|" + "US" + "D")
+    this_file = Path(__file__).resolve()
+    files = list(Path("src").rglob("*.py")) + list(Path("sql").glob("*.sql"))
+    files.append(Path("README.md"))
+    for f in files:
+        if not f.exists() or f.resolve() == this_file:
+            continue
+        text = f.read_text(encoding="utf-8", errors="ignore")
+        check(f"no dollar amounts in {f}", not pattern.search(text))
 
 # Runs all checks. Prints ALL CHECKPOINTS PASSED only if nothing failed.
 def validate():
@@ -88,6 +102,7 @@ def validate():
     dynamic_checks(raw, orders, cust)
     database_checks(orders, cust)
     reference_checks(orders, cust)
+    money_checks()
 
     if failures:
         print(f"{len(failures)} check(s) failed")
