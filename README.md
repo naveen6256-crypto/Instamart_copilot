@@ -2,7 +2,13 @@
 
 ## Overview
 
-[WRITE: 3 to 4 sentences. What the project is (internal tool for Instamart: trusted data, customer segments and lapse prediction, support ticket triage, policy assistant and refund agent), that all data is synthetic and fictional, that all amounts are in INR, and that every language-model call uses the offline mock_llm.py.]
+The Instamart Customer Intelligence & Support Copilot is an internal tool built in four connected parts. 
+Part A - Cleans messy order & exports into a trusted SQLite database. 
+Part B - Segments customers & predicts who is likely to stop ordering. 
+Part C - Classifies support tickets safely & routes them using those segments. 
+Part D - Answers policy questions from the policy documents and runs a refund agent that uses tools. 
+
+All data is synthetic and fictional, all amounts are in INR, and every language-model call goes through the offline mock_llm.py, so no API key or network is needed.
 
 Repository layout:
 
@@ -31,7 +37,8 @@ Run from the repository root, in this order:
 9. `python src/Part_B/Segments.py`
 10. `python src/Part_B/Lapse.py`
 11. `python src/Part_C/Triage.py`
-12. [ADD the Part D commands here when Part D is finished]
+12. `python src/Part_D/Policy_rag.py`
+13. `python src/Part_D/Refund_agent.py`
 
 Part B's `Lapse.py` reads `outputs/customer_segments.csv` from `Segments.py`, and Part C reads the same file for routing, so keep this order.
 
@@ -48,7 +55,12 @@ Data Foundation: Clean, Store, Query.
 | products | 40 x 4 | none |
 | tickets | 164 x 5 | none (read with keep_default_na=False) |
 
-Data types: [ADD from your audit output. Text columns are strings; quantity and discount_pct are integers; delivery_minutes and age are floats; price_inr is an integer.]
+Data Types:
+- Text columns → String
+- quantity, discount_pct, price_inr → Integer
+- delivery_minutes, age → Float
+- order_amount → String (contains values like "N/A" and "error")
+
 
 | Audit figure | Value |
 |---|---|
@@ -122,7 +134,6 @@ Q6 top customer per city:
 | Mumbai | C0693 | 14,766.55 |
 | Pune | C0426 | 10,377.10 |
 
-[WRITE: one sentence on why ties make RANK() differ from ROW_NUMBER(). Hint: tied customers share one rank, but ROW_NUMBER() still gives each a different number.]
 
 ### pandas cross-check and exploratory analysis
 
@@ -149,9 +160,20 @@ Completed order_amount statistics:
 
 Largest correlation (absolute value): order_amount and discount_pct, -0.095. The pair order_amount and quantity is +0.087.
 
-Answers to the four questions (at most 200 words in total):
+Part A - QUESTIONS
 
-[WRITE: 1) What is this data about? 2) What do the distributions and statistics look like (mean far above median, right-skewed)? 3) Are there outliers or anomalies (897 large orders above the upper fence, none below)? 4) What relationships exist (strongest pair is amount and discount at about -0.095; say that a correlation this small does not establish causation).]
+Q1. Dataset Overview: 
+The dataset contains six months of synthetic Instamart orders (April–September 2025), covering 1,200 customers across six cities, with 40 products in five categories.
+
+Q2. Distributions: 
+The mean (₹269.91) is higher than the median (₹135), indicating that most orders are small, with a few high-value orders increasing the average.Order amounts are strongly right-skewed.
+
+Q3. Outliers & Anomalies: 
+897 orders exceed the upper fence of ₹645.30, with none below the lower fence. 
+These are large but realistic orders. Data cleaning included removing duplicates, correcting invalid data types, handling missing and invalid values, and filtering negative delivery times and impossible ages.
+
+Q4. Relationships:
+ The strongest correlation is between order amount and discount percentage (-0.095), indicating a very weak negative relationship. This correlation is close to zero and does not establish causation.
 
 ## Part B
 
@@ -178,9 +200,21 @@ Customer Segments and Lapse Prediction.
 | 7 | 408.5 | 0.416 |
 | 8 | 366.5 | 0.412 |
 
-Chosen K: 4. [WRITE: why. Cover the elbow after K=4, the highest silhouette (0.526), and that four named segments are easy for the business to act on.]
+Customer Segmentation – Choosing K=4
 
-[WRITE: 2 to 3 sentences on why the inertia of K=8 is always lower than that of K=2, yet that alone cannot pick K. Hint: more clusters always sit closer to their points, down to zero when every customer is its own cluster.]
+K=4 was selected because it gives the highest silhouette score (0.526), indicating good separation between customer groups. 
+It also provides four customer segments: Premium, Loyal Frequent, Lapsing, and Occasional.
+
+These segments help the business identify high-value customers, reward loyal customers, re-engage inactive customers, and encourage occasional customers to order more frequently.
+
+-----------------------------------------------------------------------
+Inertia - Measures the total squared distance between each customer and their assigned cluster centre. As K increases, inertia always decreases because customers are grouped into smaller clusters.
+
+Therefore, K=8 will naturally have lower inertia than K=2. If every customer has its own cluster, inertia becomes zero.
+
+Lower inertia does not necessarily mean better clustering. So, we also consider the elbow method, silhouette score (0.526 for K=4 compared to 0.412 for K=8), and business interpretability to select the optimal K=4.
+
+------------------------------------------------------------------------
 
 ### Segment profile (K=4)
 
@@ -217,7 +251,11 @@ No data leakage: every feature uses only orders dated before 2025-09-01 (no data
 | One-hot columns (k-1) | city 5, gender 2, favourite category 4 |
 | Missing values in any feature column | none (asserted in code) |
 
-[WRITE: one sentence on why the two frequency means differ. Hint: the scaler saw only the 924 training rows, not the test rows.]
+-----------------------------------------------------------------------
+Frequency Mean – Training vs Full Cohort
+
+The scaler calculates its mean using only the 924 training rows, while the full-cohort mean includes all 1,156 rows (training + test). Therefore, the two values differ slightly (8.115 vs. 8.029).
+-----------------------------------------------------------------------
 
 ### Tuning and test results (GridSearchCV, cv=5, scoring=f1)
 
@@ -233,9 +271,13 @@ Test set, lapsed class:
 | Logistic regression | 111, 32, 31, 58 | 0.644 | 0.652 | 0.648 |
 | Random forest | 113, 30, 31, 58 | 0.659 | 0.652 | 0.655 |
 
+-----------------------------------------------------------------------
 Selected model: random forest (test F1 0.655, above the 0.55 minimum).
 
-[WRITE: 3 to 5 sentences justifying the choice. Mention the cost of missing a lapsing customer (all their future revenue) versus wrongly targeting a loyal one (one small coupon), so recall matters more, and that the forest has the better F1 and precision at equal recall.]
+- It has a higher cross-validated F1 score (0.681 vs. 0.651) and better test F1 (0.655 vs. 0.648) and precision (0.659 vs. 0.644), at equal recall (0.652).
+- Recall is important because missing a lapsing customer means losing all their future orders, while wrongly targeting a loyal customer costs only a small coupon.
+- Overall, Random Forest performs slightly better and exceeds the required F1 score of 0.55.
+-----------------------------------------------------------------------
 
 ### Class-balance experiment
 
@@ -246,7 +288,10 @@ Lapsed training rows were duplicated at random (with replacement, random_state=4
 | Original training data | 0.644 | 0.652 | 0.648 |
 | Balanced training data | 0.589 | 0.854 | 0.697 |
 
-[WRITE: which metric moved most (recall) and what it means for the retention team: more leavers caught, but more loyal customers contacted.]
+-----------------------------------------------------------------------
+- Recall increased the most, from 0.652 to 0.854, meaning the model identifies more customers likely to stop ordering. 
+- However, precision decreased, so more loyal customers may also receive offers. This helps the retention team reach more at-risk customers using low-cost offers like coupons.
+-----------------------------------------------------------------------
 
 ### Interpretation
 
@@ -264,7 +309,14 @@ Lapsed training rows were duplicated at random (with replacement, random_state=4
 | frequency | -1.698 |
 | cancel_rate | -0.124 |
 
-[WRITE: a one-line business reading for each of the five features and three coefficients. Example idea: frequent buyers rarely lapse.]
+-----------------------------------------------------------------------
+Feature Importance
+- Frequency (0.280): Customers who order frequently are less likely to stop ordering. The strongest protective factor.
+- Monetary (0.271): Total customer spending is the second most important factor.
+- Recency (0.115): Customers who have not ordered recently are slightly more likely to lapse.
+- Average Delivery (0.061): Delivery experience has some influence on customer retention.
+- Cancel Rate (0.052): Has a small influence on predicting customer churn.
+-----------------------------------------------------------------------
 
 The selected model is saved to `outputs/lapse_model.joblib`; the reloaded model reproduces the original test predictions exactly. `outputs/retention_list.csv` lists the Premium customers in the test set ranked by predicted lapse probability: 10 rows, of which 1 truly lapsed. The retention list is illustrative and not a leakage-free evaluation, because the Premium flag comes from whole-window RFM that includes the September window defining the lapse label.
 
@@ -306,7 +358,11 @@ Zero-shot confusion table (rows = true category, columns = predicted):
 | fraud | 11 | 0 | 23 | 0 |
 | technical | 10 | 0 | 0 | 29 |
 
-[WRITE: 3 to 4 sentences with your numbers on when the extra few-shot tokens are worth paying for. Points: about 85 extra tokens per ticket; zero-shot sent 11 fraud reports to billing; fraud tickets have a 2-hour security deadline; few-shot removed every error.]
+-----------------------------------------------------------------------
+Few-shot VS Zero-shot 
+
+Few-shot uses about 85 extra tokens per ticket compared to zero-shot. However, it improves accuracy from 85.7% to 100% and eliminates classification errors. This is worth the extra cost, especially for fraud tickets that must reach the security team within 2 hours. For low-risk tickets, zero-shot is a cheaper option.
+-----------------------------------------------------------------------
 
 ### Budget demo and routing
 
@@ -327,8 +383,39 @@ Rule-validated outputs: classified_json and classified_keyword. Sent to human re
 
 ## Part D
 
-[TO BE ADDED after Part D is built: chunking and retrieval results, evaluation with overlap 10 and 0, the seven-scenario result table, the statuses of the two stop-safely demonstrations, the tools executed in the crash-and-resume run, and the ReAct versus plan-and-execute comparison.]
+ReAct vs Plan-and-Execute
+
+1. ReAct – Token Usage
+- S1 → 5 calls → 1,017 tokens
+- S5 → 3 calls → 409 tokens
+- S6 → 2 calls → 120 tokens
+- S7 → 6 calls → 3,144 tokens (looping issue)
+Each step sends the conversation history again → more steps mean more tokens.
+
+2. Plan-and-Execute
+- Creates the complete plan in one call → executes the steps.
+- Normal refund (S1) → approximately 2 calls instead of 5.
+- Fewer calls → lower token usage.
+
+3. Handling Unexpected Situations
+- S6 → Order not found → ReAct stops safely.
+- S5 → Order cancelled → ReAct stops safely.
+- ReAct checks each result before proceeding → avoids unnecessary actions.
+- Plan-and-Execute may need replanning when unexpected situations occur.
+
+4. Final Choice – ReAct
+ReAct is better for this refund workflow because each step depends on actual results, and refunds involve money. Checking every step makes the process safer. Plan-and-Execute is more suitable for longer, predictable workflows.
 
 ## Limitations and Next Steps
 
-[WRITE: 4 to 6 short points. Required: state that the Premium flag is a post-hoc whole-window label, so the retention list is illustrative and not a leakage-free evaluation. Other ideas: synthetic data only; a keyword-based mock instead of a real model; TF-IDF matches words, not meaning; the lapse model uses one month as its label.]
+- Premium Flag: Based on the full data period, including September. Therefore, the retention list is illustrative and not a leakage-free evaluation.
+
+- Synthetic Data: All data is fictional, so results may differ with real Instamart data.
+
+- Lapse Prediction: Uses only one month (September) to identify customers who stop ordering.
+
+- Mock LLM: Uses keyword-based logic instead of a real language model. The 100% accuracy does not guarantee real-world performance.
+
+- Policy Retrieval: TF-IDF matches keywords, not meaning. Better results could be achieved using embeddings and improved text chunking.
+
+- Refund Agent: Uses a simulated refund process rather than real payment transactions.
