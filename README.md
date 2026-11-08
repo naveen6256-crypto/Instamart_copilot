@@ -21,6 +21,8 @@ Repository layout:
 | `src/Part_D/` | `Policy_rag.py` and the agent script |
 | `sql/queries.sql` | The seven SQL queries |
 | `data/`, `outputs/`, `state/` | Raw data, clean tables and database, model outputs, agent checkpoints |
+| `run_project.py` | Runs every script in order |
+| `logs/` | Log of every pipeline run (full output and timing per step) and run_history.csv.| 
 
 ## Reproduce
 
@@ -39,6 +41,7 @@ Run from the repository root, in this order:
 11. `python src/Part_C/Triage.py`
 12. `python src/Part_D/Policy_rag.py`
 13. `python src/Part_D/Refund_agent.py`
+14. `To run all scripts in order in one go and write a timed log to logs/: python run_project.py.`
 
 Part B's `Lapse.py` reads `outputs/customer_segments.csv` from `Segments.py`, and Part C reads the same file for routing, so keep this order.
 

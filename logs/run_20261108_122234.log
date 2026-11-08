@@ -1,0 +1,482 @@
+RUN 20261108_122234
+started: 2026-11-08 12:22:34
+python:  3.14.5 (F:\Projects\Instamart_copilot\.venv\Scripts\python.exe)
+
+======================================================================
+STEP 1/10: python generate_data.py
+======================================================================
+generated: customers=1200 products=40 orders_raw=13084 tickets=164
+-- OK | started 12:22:34 | took 0.3s
+
+======================================================================
+STEP 2/10: python src/Part_A/Data_cleaning.py
+======================================================================
+
+=== orders ===
+shape: (13084, 9)
+order_id                str
+customer_id             str
+product_id              str
+quantity              int64
+order_ts                str
+status                  str
+discount_pct          int64
+order_amount            str
+delivery_minutes    float64
+                  missing    pct
+order_id                0   0.00
+customer_id             0   0.00
+product_id              0   0.00
+quantity                0   0.00
+order_ts                0   0.00
+status                  0   0.00
+discount_pct            0   0.00
+order_amount           53   0.41
+delivery_minutes     2541  19.42
+
+=== customers ===
+shape: (1200, 5)
+customer_id        str
+city               str
+signup_date        str
+age            float64
+gender             str
+             missing   pct
+customer_id        0  0.00
+city               0  0.00
+signup_date        0  0.00
+age               61  5.08
+gender            30  2.50
+
+=== products ===
+shape: (40, 4)
+product_id        str
+product_name      str
+category          str
+price_inr       int64
+              missing  pct
+product_id          0  0.0
+product_name        0  0.0
+category            0  0.0
+price_inr           0  0.0
+
+=== tickets ===
+shape: (164, 5)
+ticket_id        str
+customer_id      str
+order_id         str
+text             str
+true_category    str
+               missing  pct
+ticket_id            0  0.0
+customer_id          0  0.0
+order_id             0  0.0
+text                 0  0.0
+true_category        0  0.0
+
+=== AUDIT FIGURES ===
+raw orders rows: 13084
+exact duplicate rows: 119
+pending rows: 656
+distinct order_id: 12309
+non-numeric order_amount: 120
+negative delivery_minutes: 106
+blank delivery_minutes: 2541
+blank age: 61
+age outside 10-100: 6
+distinct raw city spellings: 24
+distinct non-blank gender spellings: 10
+blank gender: 30
+
+=== CLEAN CUSTOMERS ===
+ages set to missing (outside 10-100): 6
+ages filled with city median: 67
+city
+Pune         227
+Delhi        210
+Bengaluru    197
+Chennai      191
+Hyderabad    191
+Mumbai       184
+gender
+female     610
+male       560
+unknown     30
+missing ages: 0 | min age: 18.0 | max age: 60.0
+
+=== CLEAN ORDERS ===
+rows at start: 13084
+rule 2 - exact duplicates removed: 119
+rule 3 - earlier records removed: 656
+rule 4 - amounts filled from price: 112
+rule 5 - negative delivery set to missing: 105
+rule 5 - completed delivery filled with category median: 774
+final rows: 12309
+status
+completed    11110
+cancelled     1199
+missing order_amount: 0
+missing delivery (completed): 0
+missing delivery (cancelled): 1199
+completed revenue: INR 2,998,668.80
+
+stored: data/clean/*.csv and data/instamart.db
+-- OK | started 12:22:34 | took 2.3s
+
+======================================================================
+STEP 3/10: python src/Part_A/Data_validation.py
+======================================================================
+ALL CHECKPOINTS PASSED
+-- OK | started 12:22:37 | took 1.1s
+
+======================================================================
+STEP 4/10: python src/Part_A/Sql_analysis.py
+======================================================================
+Q1 customers: 30 (expected 30)
+Q2 rows: 30 | total INR 2,998,668.80 (expected 30 rows, 2,998,668.80)
+Q2 largest cell: Bengaluru / Electronics INR 233,909.45 (expected Bengaluru / Electronics 233,909.45)
+Q3 products: 11 (expected 11)
+Q4 customers with no completed order: 25 (expected 25)
+Q5 customers above average: 550 | average INR 2552.06 (expected 550, 2552.06)
+Q6 top customer per city:
+     city customer_id  total_spend
+Bengaluru       C0082     12856.20
+  Chennai       C0930     10151.40
+    Delhi       C0291     13742.60
+Hyderabad       C0743     12730.05
+   Mumbai       C0693     14766.55
+     Pune       C0426     10377.10
+Q6 rows where RANK differs from ROW_NUMBER: 8 (expected 8)
+Q7 daily rows: 183 | last cumulative INR 2,998,668.80 (expected 183, 2,998,668.80)
+-- OK | started 12:22:38 | took 1.2s
+
+======================================================================
+STEP 5/10: python src/Part_A/Pandas_analysis.py
+======================================================================
+
+=== PIVOT TABLE (revenue, INR) ===
+category       Dairy  Electronics    Grocery  Personal Care     Snacks         All
+city                                                                              
+Bengaluru   87075.05    233909.45  110915.65       20193.85   71549.40   523643.40
+Chennai     78301.80    195508.80   93817.45       27675.40   68325.70   463629.15
+Delhi      117271.70    158549.10  112658.05       23471.50   90879.45   502829.80
+Hyderabad   83731.00    228913.10  109475.40       24800.05   81670.35   528589.90
+Mumbai      75209.85    214738.40   78970.15       38018.00   72122.10   479058.50
+Pune        90349.55    187629.25  108456.60       34275.15   80207.50   500918.05
+All        531938.95   1219248.10  614293.30      168433.95  464754.50  2998668.80
+pandas grand total: INR 2,998,668.80
+SQL total:          INR 2,998,668.80
+totals equal: True
+
+=== PER CITY (completed orders) ===
+               total  average  orders
+city                                 
+Bengaluru  523643.40   276.47    1894
+Chennai    463629.15   272.72    1700
+Delhi      502829.80   243.62    2064
+Hyderabad  528589.90   284.95    1855
+Mumbai     479058.50   297.00    1613
+Pune       500918.05   252.48    1984
+
+=== ORDER AMOUNT STATISTICS (completed) ===
+mean 269.91 | median 135.00 | skewness 4.61
+Q1 64.80 | Q3 297.00 | IQR 232.20
+lower fence -283.50 | upper fence 645.30
+outliers below lower fence: 0
+outliers above upper fence: 897
+
+=== CORRELATION MATRIX (completed) ===
+                  order_amount  discount_pct  quantity  delivery_minutes
+order_amount             1.000        -0.095     0.087            -0.003
+discount_pct            -0.095         1.000    -0.000            -0.010
+quantity                 0.087        -0.000     1.000            -0.013
+delivery_minutes        -0.003        -0.010    -0.013             1.000
+largest |correlation|: order_amount and discount_pct = -0.095
+-- OK | started 12:22:39 | took 1.5s
+
+======================================================================
+STEP 6/10: python src/Part_B/Segments.py
+======================================================================
+=== RFM TABLE ===
+customers: 1175 (expected 1175)
+recency median 19 (19), min 0 (0), max 180 (180)
+frequency mean 9.46 (9.46), max 33 (33)
+monetary mean 2552.06 (2552.06), max 14766.55 (14766.55)
+
+=== K-MEANS: INERTIA AND SILHOUETTE ===
+K   inertia   silhouette
+2     1820.8   0.465
+3     1268.2   0.445
+4      743.1   0.526
+5      617.4   0.480
+6      503.2   0.482
+7      408.5   0.416
+8      366.5   0.412
+reference: K=2 1820.8/0.465, K=3 1268.2/0.445, K=4 743.1/0.526, K=5 617.4/0.481,
+           K=6 503.2/0.482, K=7 408.5/0.416, K=8 366.5/0.412
+
+=== SEGMENT PROFILE (K=4) ===
+            size  recency  frequency  monetary
+segment_id                                    
+0            436    28.86       3.77   1057.62
+1            138    24.12       6.77   7129.70
+2            419     8.77      19.40   3410.02
+3            182   109.04       2.20    685.99
+reference K=4: sizes about 436/138/419/182; the 138 segment has monetary ~7130, frequency ~6.8; the 419 segment has frequency ~19.4, recency ~8.8
+
+=== SEGMENT NAMES AND ACTIONS ===
+segment 0: Occasional Buyers -> Small discounts and bundles to raise order frequency
+segment 1: Premium Big Spenders -> VIP offers, early access to electronics, priority support
+segment 2: Loyal Frequent Buyers -> Loyalty points and subscription offers to keep the habit
+segment 3: Lapsing / At-Risk -> Win-back coupons and a reminder before they leave
+
+saved outputs/customer_segments.csv
+
+=== PCA ===
+explained variance: 0.634 and 0.218, total 0.852 (reference about 0.634, 0.218, total 0.852)
+-- OK | started 12:22:40 | took 3.8s
+
+======================================================================
+STEP 7/10: python src/Part_B/Lapse.py
+======================================================================
+=== LAPSE COHORT ===
+cohort customers: 1156 (reference 1156) OK
+lapsed customers: 443 (reference 443) OK
+lapsed rate %: 38.32 (reference 38.32) OK
+train rows: 924 (reference 924) OK
+test rows: 232 (reference 232) OK
+
+=== BASELINE (always 'not lapsed') ===
+baseline accuracy %: 61.6 (reference 61.6) OK
+lapsed F1: 0.00 (reference 0)
+
+=== TUNING (cv=5, scoring=f1) ===
+logistic regression best: {'model__C': 100} CV F1 0.651
+random forest best:       {'model__max_depth': 8, 'model__min_samples_leaf': 10} CV F1 0.681
+
+=== TEST SET (lapsed class) ===
+
+logistic regression
+confusion matrix [[TN FP] [FN TP]]:
+[[111  32]
+ [ 31  58]]
+precision 0.644 | recall 0.652 | F1 0.648
+
+random forest
+confusion matrix [[TN FP] [FN TP]]:
+[[113  30]
+ [ 31  58]]
+precision 0.659 | recall 0.652 | F1 0.655
+
+reference: LR C=1 F1 ~0.62; RF depth 8, leaf 10, F1 ~0.65; selected model F1 must be >= 0.55
+
+=== PREPROCESSING (fitted on training rows only) ===
+frequency mean learned by the fitted scaler: 8.115
+frequency mean of the full cohort:           8.029
+They differ because the scaler saw only the 924 training rows, not the test rows.
+city: 6 categories -> 5 columns (k-1)
+gender: 3 categories -> 2 columns (k-1)
+fav_category: 5 categories -> 4 columns (k-1)
+no feature column contains a missing value: True
+
+=== SELECTED MODEL: random forest ===
+test precision 0.659 | recall 0.652 | F1 0.655
+
+=== CLASS-BALANCE EXPERIMENT ===
+balanced training counts: {1: 570, 0: 570} (reference 570 each)
+before: precision 0.644 | recall 0.652 | F1 0.648
+after:  precision 0.589 | recall 0.854 | F1 0.697
+reference: recall rises from about 0.64 to about 0.85, precision stays near 0.6
+
+=== TOP 5 RANDOM FOREST FEATURES ===
+numeric__frequency       0.280
+numeric__monetary        0.271
+numeric__recency         0.115
+numeric__avg_delivery    0.061
+numeric__cancel_rate     0.052
+
+=== LOGISTIC COEFFICIENTS (positive = more likely to lapse) ===
+numeric__recency: +0.040
+numeric__frequency: -1.698
+numeric__cancel_rate: -0.124
+
+=== SAVE AND RELOAD ===
+reloaded model reproduces test predictions exactly: True
+
+=== RETENTION LIST (Premium customers in the test set) ===
+customer_id  lapse_probability  actually_lapsed
+      C0862             0.4910                0
+      C1112             0.4841                0
+      C0060             0.4798                0
+      C0802             0.4796                0
+      C1008             0.4778                0
+      C1000             0.4624                0
+      C0525             0.4597                1
+      C0133             0.4562                0
+      C0267             0.4525                0
+      C0167             0.4522                0
+rows: 10 | truly lapsed: 1
+Note: the Premium flag uses whole-window RFM (includes September), so this list is illustrative, not a leakage-free evaluation.
+-- OK | started 12:22:44 | took 13.9s
+
+======================================================================
+STEP 8/10: python src/Part_C/Triage.py
+======================================================================
+=== REDACTION ===
+emails: 55 (reference 55) OK
+phones: 91 (reference 91) OK
+order ids: 132 (reference 132) OK
+total redactions: 278 (reference 278) OK
+patterns still found after redaction: 0 (reference 0)
+
+=== ZERO-SHOT RUN ===
+status counts: {'classified_json': 135, 'classified_keyword': 12, 'flagged_invalid_output': 9, 'skipped_empty': 4, 'flagged_long': 4}
+classified_json: 135 (reference 135) OK
+classified_keyword: 12 (reference 12) OK
+flagged_invalid_output: 9 (reference 9) OK
+classified tickets: 147 (reference 147) OK
+zero-shot accuracy %: 85.7 (reference 85.7) OK
+correct 126 of 147
+total tokens 9088 | tokens per classified ticket 61.8
+empty tickets: 4 (reference 4) OK
+long tickets: 4 (reference 4) OK
+estimated tokens of the long tickets: {734} (reference 734)
+no email, phone or order id in any prompt: True
+
+=== RETRY LOG ===
+ticket T0002 | retry 0 | wait 0.0530s
+ticket T0116 | retry 0 | wait 0.0453s
+ticket T0153 | retry 0 | wait 0.0484s
+ticket T0039 | retry 0 | wait 0.0478s
+ticket T0152 | retry 0 | wait 0.0542s
+ticket T0043 | retry 0 | wait 0.0535s
+ticket T0111 | retry 0 | wait 0.0562s
+ticket T0155 | retry 0 | wait 0.0461s
+ticket T0100 | retry 0 | wait 0.0503s
+ticket T0068 | retry 0 | wait 0.0454s
+ticket T0135 | retry 0 | wait 0.0477s
+ticket T0009 | retry 0 | wait 0.0513s
+ticket T0067 | retry 0 | wait 0.0453s
+ticket T0106 | retry 0 | wait 0.0475s
+ticket T0097 | retry 0 | wait 0.0531s
+ticket T0003 | retry 0 | wait 0.0518s
+ticket T0019 | retry 0 | wait 0.0478s
+ticket T0086 | retry 0 | wait 0.0524s
+ticket T0065 | retry 0 | wait 0.0551s
+transient errors: 19 (reference 19) OK
+retries logged: 19 | all recovered (no permanent error)
+
+=== ZERO-SHOT RUN ===
+status counts: {'classified_json': 135, 'classified_keyword': 12, 'flagged_invalid_output': 9, 'skipped_empty': 4, 'flagged_long': 4}
+classified_json: 135 (reference 135) OK
+classified_keyword: 12 (reference 12) OK
+flagged_invalid_output: 9 (reference 9) OK
+classified tickets: 147 (reference 147) OK
+zero-shot accuracy %: 85.7 (reference 85.7) OK
+correct 126 of 147
+total tokens 9088 | tokens per classified ticket 61.8
+
+confusion table (rows = true, columns = predicted):
+category   billing  delivery  fraud  technical
+ticket_id                                     
+billing         38         0      0          0
+delivery         0        36      0          0
+fraud           11         0     23          0
+technical       10         0      0         29
+
+=== FEW-SHOT RUN ===
+status counts: {'classified_json': 135, 'classified_keyword': 12, 'flagged_invalid_output': 9, 'skipped_empty': 4, 'flagged_long': 4}
+classified_json: 135 (reference 135) OK
+classified_keyword: 12 (reference 12) OK
+flagged_invalid_output: 9 (reference 9) OK
+classified tickets: 147 (reference 147) OK
+few-shot accuracy %: 100.0 (reference 100.0) OK
+correct 147 of 147
+total tokens 21568 | tokens per classified ticket 146.7
+no email, phone or order id in any prompt: True
+
+=== BUDGET DEMO ===
+TOKEN_BUDGET used: 6000 | tokens spent: 6018 | budget_exhausted tickets: 53
+
+=== FINAL ROUTING (few-shot, budget 100000) ===
+rows: 164 (reference 164)
+route
+support_queue    102
+security_team     34
+human_review      17
+premium_desk      11
+priority: {'NORMAL': 119, 'HIGH': 45}
+-- OK | started 12:22:58 | took 4.6s
+
+======================================================================
+STEP 9/10: python src/Part_D/Policy_rag.py
+======================================================================
+=== CHUNKS (40 words, overlap 10) ===
+total: 15 (reference 15)
+refund_policy.txt: 4 (reference 4) OK
+delivery_policy.txt: 3 (reference 3) OK
+escalation_policy.txt: 3 (reference 3) OK
+payment_policy.txt: 3 (reference 3) OK
+privacy_policy.txt: 2 (reference 2) OK
+
+=== RETRIEVAL: 'refund policy late delivery' ===
+refund_policy.txt | score 0.272
+refund_policy.txt | score 0.251
+refund_policy.txt | score 0.245
+all three from refund_policy.txt: True
+
+=== EVALUATION: 15 chunks, overlap 10 ===
+expected document in top 3: 12/12 (reference 12/12 at overlap 10)
+expected fact in answer:    12/12 (reference 12/12 at overlap 10)
+fallback for unanswerable:  2/2 (reference 2/2)
+
+=== EVALUATION: 13 chunks, overlap 0 ===
+expected document in top 3: 12/12 (reference 12/12 at overlap 10)
+expected fact in answer:    10/12 (reference 12/12 at overlap 10)
+fallback for unanswerable:  2/2 (reference 2/2)
+FAILED: What delivery time makes a completed order eligible for a full refund? -> doc found: True, fact in answer: False (wanted 'more than 45 minutes')
+FAILED: How soon is money returned when a payment fails but is deducted? -> doc found: True, fact in answer: False (wanted '48 hours')
+-- OK | started 12:23:03 | took 2.6s
+
+======================================================================
+STEP 10/10: python src/Part_D/Refund_agent.py
+======================================================================
+=== SEVEN SCENARIOS ===
+scenario | status | refund INR | model calls | tokens | expected | expected INR | match
+S1 | REFUND | 128.25 | 5 | 1017 | REFUND | 128.25 | OK
+S2 | REFUND | 135.00 | 5 | 1017 | REFUND | 135.00 | OK
+S3 | ESCALATE | 1999.00 | 5 | 1004 | ESCALATE | 1999.00 | OK
+S4 | DENIED | 0.00 | 4 | 701 | DENIED | 0.00 | OK
+S5 | DENIED | 0.00 | 3 | 409 | DENIED | 0.00 | OK
+S6 | NOT_FOUND | 0.00 | 2 | 120 | NOT_FOUND | 0.00 | OK
+S7 | FALLBACK_MAX_ITERATIONS | 0.00 | 6 | 3144 | FALLBACK | 0.00 | OK
+
+=== STOP SAFELY ===
+S1 with token_limit=200: FALLBACK_TOKEN_LIMIT (tokens 426, model calls 3)
+handoff note: Handing over to a human agent. Stopped because the token limit was exceeded. Tools run so far: get_order, search_policy. Request: My order ORD-100048 reached me very late. I would like a refund.
+S1 with time_limit_seconds=0: FALLBACK_TIMEOUT (model calls 0)
+
+=== CRASH AND RESUME ===
+crash: simulated crash after tool 2
+tools executed before the crash: ['get_order', 'search_policy']
+tools executed after the resume: ['calculate_refund', 'issue_refund']
+all tools across both parts, in order: ['get_order', 'search_policy', 'calculate_refund', 'issue_refund']
+final status: REFUND | refund INR 128.25 | model calls 5
+four tool executions, none repeated: True
+-- OK | started 12:23:05 | took 2.8s
+
+======================================================================
+SUMMARY
+======================================================================
+ 1  generate_data.py                   OK                        0.3s
+ 2  src/Part_A/Data_cleaning.py        OK                        2.3s
+ 3  src/Part_A/Data_validation.py      OK                        1.1s
+ 4  src/Part_A/Sql_analysis.py         OK                        1.2s
+ 5  src/Part_A/Pandas_analysis.py      OK                        1.5s
+ 6  src/Part_B/Segments.py             OK                        3.8s
+ 7  src/Part_B/Lapse.py                OK                       13.9s
+ 8  src/Part_C/Triage.py               OK                        4.6s
+ 9  src/Part_D/Policy_rag.py           OK                        2.6s
+10  src/Part_D/Refund_agent.py         OK                        2.8s
+total time: 33.9s
+ALL STEPS FINISHED
