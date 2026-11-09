@@ -3,10 +3,10 @@
 ## Overview
 
 The Instamart Customer Intelligence & Support Copilot is an internal tool built in four connected parts. 
-Part A - Cleans messy order & exports into a trusted SQLite database. 
-Part B - Segments customers & predicts who is likely to stop ordering. 
-Part C - Classifies support tickets safely & routes them using those segments. 
-Part D - Answers policy questions from the policy documents and runs a refund agent that uses tools. 
+- Part A - Cleans messy order exports into a trusted SQLite database. 
+- Part B - Segments customers & predicts who is likely to stop ordering. 
+- Part C - Classifies support tickets safely & routes them using those segments. 
+- Part D - Answers policy questions from the policy documents and runs a refund agent that uses tools. 
 
 All data is synthetic and fictional, all amounts are in INR, and every language-model call goes through the offline mock_llm.py, so no API key or network is needed.
 
@@ -14,11 +14,12 @@ Repository layout:
 
 | Path | Contents |
 |---|---|
+|Python version you used (Python 3.14)|
 | `generate_data.py`, `mock_llm.py` | Supplied files, unmodified |
 | `src/Part_A/` | `Data_cleaning.py`, `Data_validation.py`, `Sql_analysis.py`, `Pandas_analysis.py` |
 | `src/Part_B/` | `Segments.py`, `Lapse.py` |
 | `src/Part_C/` | `Triage.py` |
-| `src/Part_D/` | `Policy_rag.py` and the agent script |
+| `src/Part_D/` | `Policy_rag.py`, `Refund_agent.py` |
 | `sql/queries.sql` | The seven SQL queries |
 | `data/`, `outputs/`, `state/` | Raw data, clean tables and database, model outputs, agent checkpoints |
 | `run_project.py` | Runs every script in order |
@@ -26,7 +27,7 @@ Repository layout:
 
 ## Reproduce
 
-Run from the repository root, in this order:
+How to run the whole project from scratch: set up Python, install the libraries, then run the scripts in the order below. Run every command from the repository root.
 
 1. `python -m venv .venv`
 2. Activate it: `.venv\Scripts\Activate.ps1` (Windows PowerShell) or `source .venv/bin/activate` (Mac/Linux)
@@ -41,7 +42,8 @@ Run from the repository root, in this order:
 11. `python src/Part_C/Triage.py`
 12. `python src/Part_D/Policy_rag.py`
 13. `python src/Part_D/Refund_agent.py`
-14. `To run all scripts in order in one go and write a timed log to logs/: python run_project.py.`
+
+To run everything in one go and write a timed log to `logs/`, use `python run_project.py` (a shortcut for steps 4 to 13).
 
 Part B's `Lapse.py` reads `outputs/customer_segments.csv` from `Segments.py`, and Part C reads the same file for routing, so keep this order.
 
@@ -50,20 +52,7 @@ Part B's `Lapse.py` reads `outputs/customer_segments.csv` from `Segments.py`, an
 Data Foundation: Clean, Store, Query.
 
 ### Audit of the raw data
-
-| Table | Shape | Missing values |
-|---|---|---|
-| orders | 13,084 x 9 | order_amount 53 (0.41%), delivery_minutes 2,541 (19.42%) |
-| customers | 1,200 x 5 | age 61 (5.08%), gender 30 (2.50%) |
-| products | 40 x 4 | none |
-| tickets | 164 x 5 | none (read with keep_default_na=False) |
-
-Data Types:
-- Text columns → String
-- quantity, discount_pct, price_inr → Integer
-- delivery_minutes, age → Float
-- order_amount → String (contains values like "N/A" and "error")
-
+Table shapes: orders 13,084 x 9; customers 1,200 x 5; products 40 x 4; tickets 164 x 5.
 
 | Audit figure | Value |
 |---|---|
@@ -80,6 +69,31 @@ Data Types:
 | Raw gender spellings (non-blank) | 10 |
 | Blank gender | 30 |
 
+The 53 missing order_amount values are the entries pandas reads as missing automatically (such as "N/A"); another 67 (such as "error") stay as text, which gives the 120 non-numeric amounts.
+
+### Missing Values Per Column
+
+| Table | Column | Missing Count | Missing % |
+|---|---|---:|---:|
+| orders | order_amount | 53 | 0.41% |
+| orders | delivery_minutes | 2,541 | 19.42% |
+| orders | All other columns | 0 | 0.00% |
+| customers | age | 61 | 5.08% |
+| customers | gender | 30 | 2.50% |
+| customers | All other columns | 0 | 0.00% |
+| products | All columns | 0 | 0.00% |
+| tickets | All columns | 0 | 0.00% |
+
+*Note: The tickets table was read using `keep_default_na=False`.*
+
+### Data Types
+
+| Table | Data Types |
+|---|---|
+| orders | quantity, discount_pct → int64; delivery_minutes → float64; all other columns → text |
+| customers | age → float64; all other columns → text |
+| products | price_inr → int64; all other columns → text |
+| tickets | All columns → text |
 ### Cleaning rules
 
 Customers:
@@ -123,7 +137,7 @@ The clean tables are saved to `data/clean/` as CSV files and to `data/instamart.
 | Q3 scalar subquery | 11 products above the average price |
 | Q4 LEFT JOIN | 25 customers with no completed order |
 | Q5 CTE | 550 customers above the average spend of INR 2,552.06 |
-| Q6 window functions | 8 rows where RANK() differs from ROW_NUMBER() |
+| Q6 window functions | RANK() gives tied customers the same rank and then skips the next numbers, while ROW_NUMBER() gives every customer a different number, so after a tie the two columns disagree. |
 | Q7 running total | 183 daily rows, last cumulative value INR 2,998,668.80 |
 
 Q6 top customer per city:
@@ -163,16 +177,16 @@ Completed order_amount statistics:
 
 Largest correlation (absolute value): order_amount and discount_pct, -0.095. The pair order_amount and quantity is +0.087.
 
-Part A - QUESTIONS
+### Answers to the PART A four questions
 
 Q1. Dataset Overview: 
 The dataset contains six months of synthetic Instamart orders (April–September 2025), covering 1,200 customers across six cities, with 40 products in five categories.
 
 Q2. Distributions: 
-The mean (₹269.91) is higher than the median (₹135), indicating that most orders are small, with a few high-value orders increasing the average.Order amounts are strongly right-skewed.
+The mean (INR 269.91) is higher than the median (INR 135), indicating that most orders are small, with a few high-value orders increasing the average.Order amounts are strongly right-skewed.
 
 Q3. Outliers & Anomalies: 
-897 orders exceed the upper fence of ₹645.30, with none below the lower fence. 
+897 orders exceed the upper fence of INR 645.30, with none below the lower fence. 
 These are large but realistic orders. Data cleaning included removing duplicates, correcting invalid data types, handling missing and invalid values, and filtering negative delivery times and impossible ages.
 
 Q4. Relationships:
@@ -386,7 +400,68 @@ Rule-validated outputs: classified_json and classified_keyword. Sent to human re
 
 ## Part D
 
-ReAct vs Plan-and-Execute
+Policy RAG assistant and refund agent (`src/Part_D/Policy_rag.py`, `src/Part_D/Refund_agent.py`).
+
+### Chunking and retrieval
+
+Each policy file is split into chunks of 40 words with an overlap of 10 words, and every chunk keeps its source file name.
+
+| File | Chunks |
+|---|---|
+| refund_policy.txt | 4 |
+| delivery_policy.txt | 3 |
+| escalation_policy.txt | 3 |
+| payment_policy.txt | 3 |
+| privacy_policy.txt | 2 |
+| Total | 15 |
+
+TfidfVectorizer is fitted on the chunk texts, a query is transformed with the same vectorizer, and chunks are ranked by cosine similarity. For the query "refund policy late delivery" the top three chunks all come from refund_policy.txt (scores 0.272, 0.251, 0.245).
+
+TF (term frequency) measures how often a word appears in a chunk, and IDF (inverse document frequency) gives more weight to words that are rare across all chunks. A limitation is that TF-IDF matches exact words, not meaning, so a question that uses different words from the policy for the same idea can retrieve the wrong chunk.
+
+### Evaluation (14 questions: 12 answerable, 2 not covered)
+
+| Chunking | Chunks | Expected document in top 3 | Expected fact in answer | Fallback for unanswerable |
+|---|---|---|---|---|
+| 40 words, overlap 10 | 15 | 12/12 | 12/12 | 2/2 |
+| 40 words, overlap 0 | 13 | 12/12 | 10/12 | 2/2 |
+
+With overlap 0 two questions break: "What delivery time makes a completed order eligible for a full refund?" (expected "more than 45 minutes") and "How soon is money returned when a payment fails but is deducted?" (expected "48 hours"). The right document was still found, but the sentence holding the fact was cut at a chunk boundary, so no single chunk contained it whole. The 10-word overlap repeats the boundary words in the next chunk, which keeps such sentences intact.
+
+### Tools
+
+Five tools are defined in TOOLS_SPEC (name, description, parameters) and mapped by name in TOOL_MAP: get_order (reads data/instamart.db), search_policy (uses the retrieval above), calculate_refund, issue_refund and escalate_to_human (the last two append a JSON line with a timestamp and tool name to outputs/refund_ledger.jsonl). Refund rules: only completed orders; delivery over 45 minutes is refunded in full; 45 minutes or less is refunded 0; a refund above INR 1000 is escalated to a human and not issued automatically.
+
+### ReAct agent: seven scenarios
+
+| Scenario | Status | Refund (INR) | Model calls | Tokens used |
+|---|---|---|---|---|
+| S1 | REFUND | 128.25 | 5 | 1,017 |
+| S2 | REFUND | 135.00 | 5 | 1,017 |
+| S3 | ESCALATE | 1,999.00 | 5 | 1,004 |
+| S4 | DENIED | 0.00 | 4 | 701 |
+| S5 | DENIED | 0.00 | 3 | 409 |
+| S6 | NOT_FOUND | 0.00 | 2 | 120 |
+| S7 | FALLBACK_MAX_ITERATIONS | 0.00 | 6 | 3,144 |
+
+Every refund amount equals expected_refund_inr within 0.01. S7 uses the default token_limit of 6000 and finishes all six model calls. Each run is logged in outputs/agent_runs.jsonl with every step's tool name, arguments and observation.
+
+### Stop safely
+
+| Demonstration | Status |
+|---|---|
+| S1 with token_limit=200 | FALLBACK_TOKEN_LIMIT (426 tokens, 3 model calls; stopped before running the tool just requested) |
+| S1 with time_limit_seconds=0 | FALLBACK_TIMEOUT (0 model calls) |
+
+Every fallback returns the steps completed so far and a short handoff note for a human agent.
+
+### Crash and resume
+
+A checkpoint is written to state/ after every tool observation (run id, scenario id, message list, tokens used, step number, tools executed). For S1 a crash was simulated right after the second tool, and resume_agent then continued from the checkpoint.
+
+Tools executed across the crash and the resume, in order: get_order, search_policy (before the crash), calculate_refund, issue_refund (after the resume). Four executions, none repeated; final status REFUND with INR 128.25.
+
+### ReAct versus plan-and-execute
 
 1. ReAct – Token Usage
 - S1 → 5 calls → 1,017 tokens
@@ -408,6 +483,8 @@ Each step sends the conversation history again → more steps mean more tokens.
 
 4. Final Choice – ReAct
 ReAct is better for this refund workflow because each step depends on actual results, and refunds involve money. Checking every step makes the process safer. Plan-and-Execute is more suitable for longer, predictable workflows.
+
+
 
 ## Limitations and Next Steps
 

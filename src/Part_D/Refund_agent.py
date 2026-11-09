@@ -70,6 +70,8 @@ def write_ledger(tool, order_id, refund_inr):
 
 # Records an automatic refund (amounts up to INR 1000).
 def issue_refund(order_id, refund_inr):
+    if refund_inr > 1000:
+        return {"error": "refund above INR 1000 must be escalated to a human"}
     write_ledger("issue_refund", order_id, refund_inr)
     return {"refund_inr": refund_inr}
 
