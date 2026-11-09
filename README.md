@@ -137,7 +137,7 @@ The clean tables are saved to `data/clean/` as CSV files and to `data/instamart.
 | Q3 scalar subquery | 11 products above the average price |
 | Q4 LEFT JOIN | 25 customers with no completed order |
 | Q5 CTE | 550 customers above the average spend of INR 2,552.06 |
-| Q6 window functions | RANK() gives tied customers the same rank and then skips the next numbers, while ROW_NUMBER() gives every customer a different number, so after a tie the two columns disagree. |
+| Q6 window functions | 8 rows where RANK() differs from ROW_NUMBER() |
 | Q7 running total | 183 daily rows, last cumulative value INR 2,998,668.80 |
 
 Q6 top customer per city:
@@ -150,6 +150,8 @@ Q6 top customer per city:
 | Hyderabad | C0743 | 12,730.05 |
 | Mumbai | C0693 | 14,766.55 |
 | Pune | C0426 | 10,377.10 |
+
+RANK() gives tied customers the same rank and then skips the next numbers, while ROW_NUMBER() gives every customer a different number, so after a tie the two columns disagree.
 
 
 ### pandas cross-check and exploratory analysis
